@@ -15,7 +15,8 @@ import bitstring as bs
 NBYTES = 16
 NSAMPLE = 160 * NBYTES
 
-tpsignal =  np.load('signal.npy')
+#tpsignal = np.load('signal.npy')
+tpsignal = np.load('signalLowSNR.npy')
 tppulse =  np.load('pulse.npy')
 
 print("Signal size: {} samples".format(len(tpsignal)))
@@ -50,7 +51,8 @@ a = [1,1,0]
 b = np.zeros(len(a))
 b[0] = 1
 
-filtered_ecg = signal.filtfilt(a,b,tpsignal[0:NSAMPLE])
+#filtered_ecg = signal.filtfilt(a,b,tpsignal[0:NSAMPLE])
+filtered_ecg = signal.filtfilt(np.flip(tppulse),1,tpsignal[0:NSAMPLE])
 
 #a = [1,1,0]
 #b = [1,0,0]
@@ -62,7 +64,7 @@ plt.plot(filtered_ecg[:NSAMPLE], 'b-', linewidth=1, label='filtered_ecg')
 plt.legend(loc='best')
 # plt.show()
 
-sig_mean = np.mean(filtered_ecg)
+sig_mean = np.mean(filtered_ecg)+0.1
 print("Mean filter signal: {}".format(sig_mean))
 
 numBits = int(NSAMPLE/20) 
@@ -88,5 +90,71 @@ for i in range(numBits):
         
 for data in bytestream:    
     byte = bs.BitArray(data)
-    print("0x{} 0b{}".format(str(byte.hex),str(byte.bin)))   
+    print("0x{} 0b{}".format(str(byte.hex),str(byte.bin)))  
 
+
+# Make Histogram
+    
+byteHeader = [1, 0, 1, 0, 1, 1, 0, 0]
+onesList  = []
+zerosList = []
+byteCount = 0
+
+for i in range(numBits):
+    sample =  filtered_ecg[(i*20) + 1]
+    if(byteHeader[byteCount] == 1):
+        onesList.append(sample)
+    else:
+        zerosList.append(sample)
+    byteCount += 1
+    if(byteCount == 8):
+        byteCount = 0
+        
+   
+plt.figure()
+histRange =  np.arange(0, 2, 0.1) 
+plt.hist(onesList, bins=histRange, alpha=0.6, label='my label')
+plt.hist(zerosList, bins=histRange, alpha=0.6, label='0 bits')
+plt.title("Histogram")
+plt.show()
+
+print("---------------------------")
+
+onesHist, bins = np.histogram(onesList, bins=histRange)
+zerosHist, bins = np.histogram(zerosList, bins=histRange)
+print(onesHist)
+print(zerosHist)
+print(bins)
+
+print("---------------------------")
+
+bitstream = []
+bytestream = []
+byteCount = 0
+bites = []
+for i in range(numBits):
+    sample =  filtered_ecg[(i*20) + 1]
+    
+    if (sample > 1.6):
+        bitstream.append(1)
+        bites.append(1)
+    elif(sample < 1.4):
+        bitstream.append(0)
+        bites.append(0)
+    else:
+        if(byteHeader[byteCount] == 1):
+            bitstream.append(1)
+            bites.append(1)
+        else:
+            bitstream.append(0)
+            bites.append(0)
+       
+    byteCount += 1
+    if(byteCount == 8):
+        bytestream.append(np.array(bites))
+        bites = []
+        byteCount = 0
+        
+for data in bytestream:    
+    byte = bs.BitArray(data)
+    print("0x{} 0b{}".format(str(byte.hex),str(byte.bin)))
